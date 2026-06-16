@@ -345,3 +345,100 @@ document.getElementById('restart-btn').addEventListener('click', () => {
 });
 
 startGame();
+
+// ── Mobile scaling ────────────────────────────────────────────────────────
+function scaleGameArea() {
+  const gameArea = document.querySelector('.game-area');
+  const vw = document.documentElement.clientWidth;
+  const naturalW = canvas.width + 20 + 140; // board + gap + sidebar
+  if (vw >= naturalW + 32) {
+    gameArea.style.transform = '';
+    gameArea.style.marginBottom = '';
+    return;
+  }
+  const scale = (vw - 16) / naturalW;
+  const heightReduction = canvas.height * (1 - scale);
+  gameArea.style.transform = `scale(${scale.toFixed(4)})`;
+  gameArea.style.marginBottom = `-${Math.round(heightReduction)}px`;
+}
+
+window.addEventListener('resize', scaleGameArea);
+scaleGameArea();
+
+// ── Touch swipe on canvas ─────────────────────────────────────────────────
+let touchStartX = 0, touchStartY = 0, lastSwipeX = 0, swipeMoved = false;
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  tryStartAudio();
+  touchStartX = lastSwipeX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+  swipeMoved = false;
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (gameOver || flashingRows) return;
+  const dx = e.touches[0].clientX - lastSwipeX;
+  if (Math.abs(dx) >= 20) {
+    movePiece(dx > 0 ? 1 : -1, 0);
+    lastSwipeX = e.touches[0].clientX;
+    swipeMoved = true;
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (gameOver || flashingRows || swipeMoved) return;
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  const absDx = Math.abs(dx), absDy = Math.abs(dy);
+  if (absDx < 10 && absDy < 10) {
+    rotatePiece();                          // tap → rotate
+  } else if (dy > 40 && absDy > absDx) {
+    hardDrop();                             // swipe down → hard drop
+  } else if (dy < -30 && absDy > absDx) {
+    rotatePiece();                          // swipe up → rotate
+  }
+}, { passive: false });
+
+// ── On-screen button helpers ──────────────────────────────────────────────
+function addRepeatBtn(id, action) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  let interval;
+  const press = e => {
+    e.preventDefault();
+    tryStartAudio();
+    if (!gameOver && !flashingRows) action();
+    clearInterval(interval);
+    interval = setInterval(() => { if (!gameOver && !flashingRows) action(); }, 100);
+  };
+  const release = () => clearInterval(interval);
+  btn.addEventListener('touchstart', press, { passive: false });
+  btn.addEventListener('touchend', release);
+  btn.addEventListener('touchcancel', release);
+  btn.addEventListener('mousedown', press);
+  btn.addEventListener('mouseup', release);
+  btn.addEventListener('mouseleave', release);
+}
+
+function addTapBtn(id, action) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.addEventListener('touchstart', e => {
+    e.preventDefault();
+    tryStartAudio();
+    if (!gameOver && !flashingRows) action();
+  }, { passive: false });
+  btn.addEventListener('mousedown', () => {
+    tryStartAudio();
+    if (!gameOver && !flashingRows) action();
+  });
+}
+
+addRepeatBtn('btn-left',   () => movePiece(-1, 0));
+addRepeatBtn('btn-right',  () => movePiece(1, 0));
+addRepeatBtn('btn-down',   () => movePiece(0, 1));
+addTapBtn('btn-rotate', rotatePiece);
+addTapBtn('btn-hard',   hardDrop);
