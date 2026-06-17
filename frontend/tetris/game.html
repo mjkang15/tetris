@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Tetris</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="top-bar">
+      <a href="index.html" class="back-link">← 소개 페이지</a>
+      <div class="user-bar">
+        <span id="user-status" class="user-name"></span>
+        <button id="auth-btn" class="auth-btn">로그인 / 회원가입</button>
+      </div>
+    </div>
+
+    <h1 class="title">TETRIS</h1>
+
+    <div class="game-area">
+      <canvas id="board" width="300" height="600"></canvas>
+      <div class="sidebar">
+        <div class="stat-block">
+          <span class="stat-label">NEXT</span>
+          <canvas id="next" width="100" height="100"></canvas>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">SCORE</span>
+          <span class="stat-value" id="score">0</span>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">LEVEL</span>
+          <span class="stat-value" id="level">1</span>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">LINES</span>
+          <span class="stat-value" id="lines">0</span>
+        </div>
+        <div class="stat-block top-score-block">
+          <span class="stat-label">TOP SCORE</span>
+          <span class="stat-value stat-value-sm" id="top-score">-</span>
+          <span class="top-score-user" id="top-score-user"></span>
+        </div>
+        <div class="controls">
+          <p class="controls-title">조작키</p>
+          <ul>
+            <li><kbd>←</kbd> <kbd>→</kbd> 이동</li>
+            <li><kbd>↓</kbd> 소프트 드롭</li>
+            <li><kbd>↑</kbd> 회전</li>
+            <li><kbd>Space</kbd> 하드 드롭</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mobile-controls">
+    <div class="btn-row">
+      <button class="ctrl-btn" id="btn-left" aria-label="왼쪽 이동">◀</button>
+      <button class="ctrl-btn" id="btn-rotate" aria-label="회전">↻</button>
+      <button class="ctrl-btn" id="btn-right" aria-label="오른쪽 이동">▶</button>
+    </div>
+    <div class="btn-row">
+      <button class="ctrl-btn" id="btn-down" aria-label="소프트 드롭">▼</button>
+      <button class="ctrl-btn" id="btn-hard" aria-label="하드 드롭">⬇</button>
+    </div>
+  </div>
+
+  <div id="overlay" class="overlay hidden">
+    <div class="overlay-box">
+      <p id="overlay-title">GAME OVER</p>
+      <p id="overlay-score"></p>
+      <p id="overlay-saved" class="overlay-saved"></p>
+      <button id="restart-btn">다시 시작</button>
+    </div>
+  </div>
+
+  <!-- 로그인 / 회원가입 모달 -->
+  <div id="auth-modal" class="modal hidden">
+    <div class="modal-box">
+      <button id="modal-close" class="modal-close">×</button>
+      <div class="modal-tabs">
+        <button class="tab-btn active" data-tab="login">로그인</button>
+        <button class="tab-btn" data-tab="register">회원가입</button>
+      </div>
+
+      <div id="tab-login" class="tab-content">
+        <div class="form-group">
+          <label>이메일</label>
+          <input type="email" id="login-email" placeholder="email@example.com" autocomplete="email" />
+        </div>
+        <div class="form-group">
+          <label>비밀번호</label>
+          <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <button id="login-submit" class="submit-btn">로그인</button>
+        <p id="login-error" class="form-error"></p>
+      </div>
+
+      <div id="tab-register" class="tab-content hidden">
+        <div class="form-group">
+          <label>닉네임</label>
+          <input type="text" id="reg-username" placeholder="테트리스고수" autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label>이메일</label>
+          <input type="email" id="reg-email" placeholder="email@example.com" autocomplete="email" />
+        </div>
+        <div class="form-group">
+          <label>비밀번호</label>
+          <input type="password" id="reg-password" placeholder="••••••••" autocomplete="new-password" />
+        </div>
+        <button id="reg-submit" class="submit-btn">회원가입</button>
+        <p id="reg-error" class="form-error"></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
