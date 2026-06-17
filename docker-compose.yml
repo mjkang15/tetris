@@ -1,32 +1,11 @@
 services:
-  db:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: tetris_root
-      MYSQL_DATABASE: tetris
-      MYSQL_USER: tetris
-      MYSQL_PASSWORD: tetris_pass
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ptetris_root"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   backend:
     build: ./backend
     environment:
-      DATABASE_URL: mysql+pymysql://tetris:tetris_pass@db:3306/tetris
+      DATABASE_URL: sqlite:///./tetris.db
       SECRET_KEY: tetris-secret-key-change-in-production-2026
       CORS_ORIGINS: "*"
     ports:
       - "8000:8000"
-    depends_on:
-      db:
-        condition: service_healthy
-
-volumes:
-  mysql_data:
+    volumes:
+      - ./backend/tetris.db:/app/tetris.db
