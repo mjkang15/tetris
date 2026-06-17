@@ -18,6 +18,10 @@ const TIME_PER_LEVEL = 30000;
 const FLASH_DURATION = 500;
 const FLASH_INTERVAL = 80;
 
+const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? 'http://localhost:8000'
+  : 'https://tetris-api-mjkang.onrender.com';
+
 // ── BGM: Tetris Type-A (Korobeiniki) ──────────────────────────────────────
 const BPM = 145;
 const Q = 60 / BPM, E = Q / 2, H = Q * 2, DQ = Q * 1.5;
@@ -47,12 +51,93 @@ const linesEl    = document.getElementById('lines');
 const overlay    = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
+const overlaySaved = document.getElementById('overlay-saved');
 
 // ── State ─────────────────────────────────────────────────────────────────
 let board, score, level, lines, current, nextPiece;
 let dropTimer, lastTime, gameStartTs, animId, gameOver;
 let flashingRows, flashTimer;
 let audioCtx = null, bgmTimeout = null, bgmActive = false;
+
+// ── Auth state ────────────────────────────────────────────────────────────
+let currentUser = null;
+let authToken = null;
+
+function loadAuth() {
+  authToken = localStorage.getItem('tetris_token');
+  const userJson = localStorage.getItem('tetris_user');
+  if (authToken && userJson) {
+    try { currentUser = JSON.parse(userJson); } catch { clearAuth(); return; }
+  }
+  updateAuthUI();
+}
+
+function saveAuth(token, user) {
+  authToken = token;
+  currentUser = user;
+  localStorage.setItem('tetris_token', token);
+  localStorage.setItem('tetris_user', JSON.stringify(user));
+  updateAuthUI();
+}
+
+function clearAuth() {
+  authToken = null;
+  currentUser = null;
+  localStorage.removeItem('tetris_token');
+  localStorage.removeItem('tetris_user');
+  updateAuthUI();
+}
+
+function updateAuthUI() {
+  const userStatus = document.getElementById('user-status');
+  const authBtn = document.getElementById('auth-btn');
+  if (currentUser) {
+    userStatus.textContent = `${currentUser.username}님`;
+    authBtn.textContent = '로그아웃';
+  } else {
+    userStatus.textContent = '';
+    authBtn.textContent = '로그인 / 회원가입';
+  }
+}
+
+// ── API helpers ───────────────────────────────────────────────────────────
+async function apiRequest(method, path, body = null, requireAuth = false) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (requireAuth && authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || '오류가 발생했습니다');
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+async function fetchTopScore() {
+  try {
+    const data = await apiRequest('GET', '/scores/top');
+    const el = document.getElementById('top-score');
+    const userEl = document.getElementById('top-score-user');
+    if (data) {
+      el.textContent = data.score.toLocaleString();
+      userEl.textContent = data.username;
+    } else {
+      el.textContent = '-';
+      userEl.textContent = '';
+    }
+  } catch { /* 서버 미연결 시 무시 */ }
+}
+
+async function submitScore(s, l, lv) {
+  if (!authToken) return null;
+  try {
+    return await apiRequest('POST', '/scores', { score: s, lines: l, level: lv }, true);
+  } catch { return null; }
+}
 
 // ── Audio ─────────────────────────────────────────────────────────────────
 function initAudio() {
@@ -302,13 +387,30 @@ function gameLoop(ts) {
   animId = requestAnimationFrame(gameLoop);
 }
 
-function endGame() {
+async function endGame() {
   gameOver = true;
   stopBGM();
   cancelAnimationFrame(animId);
   overlayTitle.textContent = 'GAME OVER';
-  overlayScore.textContent = `최종 점수: ${score}`;
+  overlayScore.textContent = `최종 점수: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
+
+  if (currentUser) {
+    overlaySaved.style.color = '#aaa';
+    overlaySaved.textContent = '점수 저장 중...';
+    const result = await submitScore(score, lines, level);
+    if (result) {
+      overlaySaved.style.color = '#4caf50';
+      overlaySaved.textContent = '기록이 저장되었습니다!';
+      fetchTopScore();
+    } else {
+      overlaySaved.style.color = '#e94560';
+      overlaySaved.textContent = '점수 저장에 실패했습니다';
+    }
+  } else {
+    overlaySaved.style.color = '#888';
+    overlaySaved.textContent = '로그인하면 기록이 저장됩니다';
+  }
 }
 
 function startGame() {
@@ -319,6 +421,7 @@ function startGame() {
   nextPiece = randomPiece();
   updateStats();
   overlay.classList.add('hidden');
+  overlaySaved.textContent = '';
   stopBGM();
   spawnPiece();
   cancelAnimationFrame(animId);
@@ -344,6 +447,99 @@ document.getElementById('restart-btn').addEventListener('click', () => {
   initAudio();
 });
 
+// ── Auth UI ───────────────────────────────────────────────────────────────
+const authModal = document.getElementById('auth-modal');
+
+document.getElementById('auth-btn').addEventListener('click', () => {
+  if (currentUser) {
+    clearAuth();
+  } else {
+    openModal('login');
+  }
+});
+
+document.getElementById('modal-close').addEventListener('click', () => {
+  authModal.classList.add('hidden');
+});
+
+authModal.addEventListener('click', e => {
+  if (e.target === authModal) authModal.classList.add('hidden');
+});
+
+function openModal(tab) {
+  authModal.classList.remove('hidden');
+  switchTab(tab);
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(p => p.classList.add('hidden'));
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+  document.getElementById(`tab-${tab}`).classList.remove('hidden');
+  document.getElementById(`${tab === 'login' ? 'login' : 'reg'}-error`).textContent = '';
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+document.getElementById('login-submit').addEventListener('click', async () => {
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errorEl  = document.getElementById('login-error');
+  const btn      = document.getElementById('login-submit');
+  errorEl.textContent = '';
+  if (!email || !password) { errorEl.textContent = '이메일과 비밀번호를 입력해주세요'; return; }
+  btn.disabled = true;
+  try {
+    const data = await apiRequest('POST', '/auth/login', { email, password });
+    saveAuth(data.access_token, data.user);
+    authModal.classList.add('hidden');
+    document.getElementById('login-password').value = '';
+    fetchTopScore();
+  } catch (e) {
+    errorEl.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('login-password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('login-submit').click();
+});
+
+document.getElementById('reg-submit').addEventListener('click', async () => {
+  const username = document.getElementById('reg-username').value.trim();
+  const email    = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const errorEl  = document.getElementById('reg-error');
+  const btn      = document.getElementById('reg-submit');
+  errorEl.textContent = '';
+  if (!username) { errorEl.textContent = '닉네임을 입력해주세요'; return; }
+  if (!email)    { errorEl.textContent = '이메일을 입력해주세요'; return; }
+  if (password.length < 6) { errorEl.textContent = '비밀번호는 6자 이상이어야 합니다'; return; }
+  btn.disabled = true;
+  try {
+    const data = await apiRequest('POST', '/auth/register', { username, email, password });
+    saveAuth(data.access_token, data.user);
+    authModal.classList.add('hidden');
+    document.getElementById('reg-password').value = '';
+    fetchTopScore();
+  } catch (e) {
+    errorEl.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('reg-password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('reg-submit').click();
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────
+loadAuth();
+fetchTopScore();
+setInterval(fetchTopScore, 30000); // 30초마다 최고점수 갱신
 startGame();
 
 // ── Mobile scaling ────────────────────────────────────────────────────────
