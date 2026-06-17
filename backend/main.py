@@ -8,11 +8,17 @@ import auth
 
 models.Base.metadata.create_all(bind=engine)
 
+import os
+
 app = FastAPI(title="Tetris API", version="1.0.0")
+
+# Environment variable for allowed CORS origins (comma-separated). Default to '*'
+cors_origins_env = os.getenv("CORS_ORIGINS")
+origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()] if cors_origins_env else ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

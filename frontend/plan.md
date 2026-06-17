@@ -2,22 +2,34 @@
 
 ## 개요
 
-브라우저에서 파일을 바로 열어 실행할 수 있는 테트리스 게임.
-별도 서버나 빌드 없이 `landing.html`(소개) → `index.html`(게임) 순으로 이동.
+브라우저에서 파일을 바로 열어 실행할 수 있는 테트리스 게임 및 점수 관리 시스템.
+별도 서버나 빌드 없이 `landing.html`(소개) → `index.html`(게임) 순으로 이동하며, FastAPI 백엔드 서버와 연동하여 사용자 인증 및 최고 점수 실시간 등록/조회 기능을 제공함.
 
 ---
 
 ## 파일 구조
 
-```
+```text
 tetris/
-├── landing.html   # 랜딩 페이지 (소개 · 사용법 · 게임 링크)
-├── landing.css    # 랜딩 페이지 스타일
-├── landing.js     # 히어로 미니 애니메이션 캔버스
-├── index.html     # 게임 페이지 마크업
-├── style.css      # 게임 페이지 스타일
-├── game.js        # 게임 전체 로직
-└── plan.md        # 이 파일
+├── backend/                  # FastAPI 백엔드 (Python)
+│   ├── main.py               # API 엔드포인트 정의 및 CORS 설정
+│   ├── auth.py               # JWT 기반 인증 및 패스워드 검증
+│   ├── database.py           # SQLite 커넥션 설정
+│   ├── models.py             # SQLAlchemy DB 모델 (User, Score)
+│   ├── schemas.py            # Pydantic 데이터 검증 스키마
+│   ├── requirements.txt      # 백엔드 의존성 패키지 목록
+│   ├── Dockerfile            # 배포용 도커 파일
+│   └── tetris.db             # SQLite 로컬 데이터베이스
+├── tetris/                   # 프론트엔드 (HTML / CSS / JS)
+│   ├── landing.html          # 소개 페이지 (소개 · 사용법 · 게임 링크)
+│   ├── landing.css           # 소개 페이지 스타일
+│   ├── landing.js            # 히어로 미니 애니메이션 캔버스 데모
+│   ├── index.html            # 게임 페이지 마크업
+│   ├── style.css             # 게임 페이지 스타일
+│   ├── game.js               # 게임 전체 로직 & API 연동
+│   ├── github_pages.md       # GitHub Pages 배포 가이드
+│   └── plan.md               # 이 파일 (개발 계획서)
+└── render.yaml               # Render.com 클라우드 서비스 배포 설정
 ```
 
 ---
@@ -46,14 +58,15 @@ tetris/
 
 ### 레이아웃
 
-```
-← 소개 페이지
+```text
+← 소개 페이지           [로그인 / 회원가입 또는 사용자명(로그아웃)]
      TETRIS
 ┌──────────────┬─────────────┐
 │              │  [NEXT 미리보기]│
 │  게임보드     │  SCORE      │
 │  10×20       │  LEVEL      │
 │  (Canvas)    │  LINES      │
+│              │  [TOP SCORE]│
 │              │  [조작키 안내]│
 └──────────────┴─────────────┘
 ```
@@ -61,7 +74,8 @@ tetris/
 - `<canvas id="board">` — 메인 게임 보드 (300×600 px, 10×20 셀)
 - `<canvas id="next">` — 다음 블록 미리보기 (100×100 px, 4×4 셀)
 - 좌상단 "← 소개 페이지" 링크 → `landing.html`
-- 게임 오버 시 전면 오버레이 표시
+- 우상단 유저 정보 영역 및 로그인/로그아웃 버튼 제공
+- 게임 오버 시 최종 점수와 백엔드 등록 여부가 전면 오버레이에 표시됨
 
 ---
 
@@ -183,6 +197,30 @@ tetris/
 
 ---
 
+## 백엔드 API 및 인증 (FastAPI)
+
+### 인증 구조
+- JWT (JSON Web Token) 기반 Access Token 인증을 사용합니다.
+- 로그인/회원가입 후 발급받은 Access Token은 브라우저의 `localStorage` (`tetris_token` 키)에 보관하며, API 호출 시 `Authorization: Bearer <token>` 헤더로 전달합니다.
+- 현재 로그인 정보는 `localStorage` (`tetris_user` 키)에 JSON 구조로 동기화됩니다.
+
+### 데이터베이스 스키마
+- **users**: 사용자 테이블 (`id`, `email`, `username`, `hashed_password`, `created_at`)
+- **scores**: 점수 테이블 (`id`, `user_id`, `score`, `lines`, `level`, `played_at`) - User 테이블과 1:N 관계를 맺습니다.
+
+### API 명세
+
+| 엔드포인트 | 메서드 | 인증 필요 | 설명 |
+|---|---|---|---|
+| `/auth/register` | POST | X | 이메일, 닉네임, 패스워드로 신규 사용자 가입 및 JWT 토큰 반환 |
+| `/auth/login` | POST | X | 이메일과 패스워드로 로그인 처리 및 JWT 토큰 반환 |
+| `/auth/me` | GET | O | 현재 인증된 사용자 정보 가져오기 |
+| `/scores` | POST | O | 게임 오버 시 획득한 점수, 라인 수, 최종 레벨 저장 |
+| `/scores/top` | GET | X | 전체 유저 중 최고 기록(점수, 유저명, 기록 일시) 조회 |
+| `/scores/me` | GET | O | 최근 본인이 기록한 점수 상위 10개 내역 조회 |
+
+---
+
 ## 검증 방법
 
 1. `landing.html`을 브라우저에서 열기 → 히어로 애니메이션 확인
@@ -198,3 +236,8 @@ tetris/
 11. 모바일에서 하단 버튼 패널 표시 확인
 12. 캔버스 탭·드래그·스와이프 제스처 동작 확인
 13. 좁은 화면에서 게임 영역 자동 축소 확인
+14. 우상단 "로그인 / 회원가입" 버튼 클릭 후 모달 작동 여부 확인
+15. 회원가입 및 로그인 정상 처리 후 세션 유지 및 닉네임 표시 확인
+16. 로그인 상태에서 게임 오버 시 백엔드 데이터베이스로의 점수 전송 및 탑 스코어 실시간 갱신 확인
+17. 로그아웃 클릭 시 로컬 세션 삭제 및 비인증 상태 전환 확인
+
